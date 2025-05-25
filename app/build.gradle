@@ -1,0 +1,34 @@
+plugins { id 'com.android.application' version '8.5.0' apply true }
+
+android {
+    namespace       "com.example.auxviewer"
+    compileSdk      34
+
+    defaultConfig {
+        applicationId "com.example.auxviewer"
+        minSdk        26
+        targetSdk     34
+        versionCode   1
+        versionName   "1.0"
+        ndk { abiFilters "arm64-v8a", "armeabi-v7a" }   // UIS7862 is arm64
+    }
+
+    buildFeatures { viewBinding true }
+
+    externalNativeBuild {
+        cmake {
+        path "src/main/cpp/CMakeLists.txt"
+        cppFlags "-std=c++17"
+    }
+
+    packagingOptions { jniLibs.useLegacyPackaging true }
+}
+
+dependencies {
+    implementation "androidx.appcompat:appcompat:1.6.1"
+    implementation "androidx.constraintlayout:constraintlayout:2.1.4"
+    implementation "androidx.lifecycle:lifecycle-runtime-ktx:2.7.0"
+    implementation "androidx.activity:activity-ktx:1.9.0"
+    // OpenGL helper
+    implementation "androidx.renderscript:renderscript:1.3.1"
+}

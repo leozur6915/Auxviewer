@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Custom AUX Viewer</string>
+
+    <!-- Button captions -->
+    <string name="mirror_lr">Mirror L-R</string>
+    <string name="flip_ud">Flip U-D</string>
+    <string name="fmt_toggle">NTSC / PAL</string>
+    <string name="audio_toggle">Audio ▶︎</string>
+</resources>
