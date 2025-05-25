@@ -25,11 +25,15 @@ android {
     }
 
     externalNativeBuild {
-        cmake {
-            path "src/main/cpp/CMakeLists.txt"
-            cppFlags "-std=c++17"
-        }
+    cmake {
+        path "src/main/cpp/CMakeLists.txt"
+
+        // Pass C++-17 to Clang via an argument understood by CMake’s toolchain
+        // (this replaces the deprecated cppFlags)
+        arguments "-DANDROID_CPP_FLAGS=-std=c++17"
     }
+}
+
 
     packagingOptions {
         jniLibs {
