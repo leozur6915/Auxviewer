@@ -1,34 +1,30 @@
 name: Build-APK
-
-on:
-  push:
-    branches: [ main ]
+on: [push]
 
 jobs:
   build:
     runs-on: ubuntu-latest
 
     steps:
-    - name: Check-out code
-      uses: actions/checkout@v4
+    - uses: actions/checkout@v4
 
-    # Set up JDK 17 (required by AGP 8.x)
-    - name: Set up JDK
-      uses: actions/setup-java@v4
+    # Make sure gradlew is executable
+    - name: Grant execute permission for gradlew
+      run: chmod +x ./gradlew        # adjust path if gradlew is inside CustomAuxViewer/
+
+    # Install JDK + setup Gradle cache
+    - uses: gradle/actions/setup-gradle@v3
       with:
-        distribution: temurin
-        java-version: 17
+        gradle-version: 8.5
+        cache-enabled: true
 
-    # Cache Gradle deps to speed up subsequent builds
-    - name: Gradle cache
-      uses: gradle/gradle-build-action@v3
+    # If your project sits in a sub-folder, cd into it:
+    # working-directory: CustomAuxViewer
 
-    # Build debug APK (includes native .so)
-    - name: Assemble Debug
+    - name: Build debug APK
       run: ./gradlew assembleDebug
 
-    # Upload the generated APK so you can download it
-    - name: Publish APK artifact
+    - name: Upload APK
       uses: actions/upload-artifact@v4
       with:
         name: CustomAUXViewer-debug
