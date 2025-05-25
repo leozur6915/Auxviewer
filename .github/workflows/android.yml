@@ -13,7 +13,7 @@ jobs:
 
     - uses: gradle/actions/setup-gradle@v3
       with:
-        gradle-version: 8.5            # same as wrapper properties
+        gradle-version: 8.8            # same as wrapper properties
 
     - name: Build debug APK
       run: ./gradlew assembleDebug     # ← SAME path:  ./gradlew
