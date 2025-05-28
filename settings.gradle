@@ -1,2 +1,11 @@
+pluginManagement {
+    repositories {
+        // Order matters: Google first for AGP, then Maven Central, then Plugin Portal
+        google()
+        mavenCentral()
+        gradlePluginPortal()
+    }
+}
+
 rootProject.name = "CustomAuxViewer"
 include ':app'
