@@ -22,9 +22,29 @@
         android:gravity="center"
         app:layout_constraintBottom_toBottomOf="parent">
 
-        <Button android:id="@+id/mirrorBtn" android:text="Mirror L-R" />
-        <Button android:id="@+id/flipBtn"   android:text="Flip U-D"  />
-        <Button android:id="@+id/fmtBtn"    android:text="NTSC / PAL"/>
-        <Button android:id="@+id/audioBtn"  android:text="Audio ▶︎" />
+        <Button
+    android:id="@+id/mirrorBtn"
+    android:layout_width="wrap_content"
+    android:layout_height="wrap_content"
+    android:text="Mirror L-R"/>
+
+<Button
+    android:id="@+id/flipBtn"
+    android:layout_width="wrap_content"
+    android:layout_height="wrap_content"
+    android:text="Flip U-D"/>
+
+<Button
+    android:id="@+id/fmtBtn"
+    android:layout_width="wrap_content"
+    android:layout_height="wrap_content"
+    android:text="NTSC / PAL"/>
+
+<Button
+    android:id="@+id/audioBtn"
+    android:layout_width="wrap_content"
+    android:layout_height="wrap_content"
+    android:text="Audio ▶︎"/>
+
     </LinearLayout>
 </androidx.constraintlayout.widget.ConstraintLayout>
