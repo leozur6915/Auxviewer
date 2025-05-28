@@ -1,8 +1,10 @@
 /* app/build.gradle  —  Groovy DSL */
 
 plugins {
-    id 'com.android.application'      // no version, no ‘apply true’
+    id 'com.android.application'
+    id 'org.jetbrains.kotlin.android'   //  ← add this line
 }
+
 
 android {
     namespace      "com.example.auxviewer"
