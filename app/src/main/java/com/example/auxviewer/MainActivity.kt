@@ -15,10 +15,10 @@ class MainActivity : ComponentActivity(), SurfaceHolder.Callback {
 
     private lateinit var binding: ActivityMainBinding
     private val renderer = VideoRenderer()          // unchanged
-
+    private var mirrorKeyCode = -1  
+    
     /* ---------- persistent prefs ---------- */
     private val prefs by lazy { getSharedPreferences("mirror_prefs", MODE_PRIVATE) }
-    private var mirrorKeyCode = prefs.getInt("pref_mirror_key", -1)
 
     /* ---------- MediaProjection launcher ---------- */
     private val projMgr by lazy { getSystemService(MEDIA_PROJECTION_SERVICE) as MediaProjectionManager }
@@ -44,6 +44,8 @@ class MainActivity : ComponentActivity(), SurfaceHolder.Callback {
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
+        mirrorKeyCode = prefs.getInt("pref_mirror_key", -1)
+        
         binding.surface.holder.addCallback(this)
 
         binding.mirrorBtn.setOnClickListener {
