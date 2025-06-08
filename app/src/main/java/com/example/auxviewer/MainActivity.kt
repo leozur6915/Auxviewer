@@ -14,25 +14,26 @@ import com.example.auxviewer.databinding.ActivityMainBinding
 class MainActivity : ComponentActivity(), SurfaceHolder.Callback {
 
     private lateinit var binding: ActivityMainBinding
-    private val renderer = VideoRenderer()          // unchanged
-    private var mirrorKeyCode = -1  
-    
+    private val renderer = VideoRenderer()
+
     /* ---------- persistent prefs ---------- */
     private val prefs by lazy { getSharedPreferences("mirror_prefs", MODE_PRIVATE) }
+    private var mirrorKeyCode = -1            // set later, after Context ready
 
     /* ---------- MediaProjection launcher ---------- */
-    private val projMgr by lazy { getSystemService(MEDIA_PROJECTION_SERVICE) as MediaProjectionManager }
+    private val projMgr by lazy {
+        getSystemService(MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
+    }
 
     private val projLauncher =
         registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { res ->
             if (res.resultCode == Activity.RESULT_OK && res.data != null) {
-                Intent(this, ScreenMirrorService::class.java).also {
-                    it.putExtra("code", res.resultCode)
-                    it.putExtra("data", res.data)
-                    startForegroundService(it)
-                    mirroring = true
-                    binding.mirrorBtn.isEnabled = false
-                }
+                // Pass the projection Intent to the foreground-service
+                val svc = Intent(this, ScreenMirrorService::class.java)
+                svc.putExtra("result_data", res.data)
+                startService(svc)                     // Service promotes itself
+                mirroring = true
+                binding.mirrorBtn.isEnabled = false
             }
         }
 
@@ -45,16 +46,15 @@ class MainActivity : ComponentActivity(), SurfaceHolder.Callback {
         setContentView(binding.root)
 
         mirrorKeyCode = prefs.getInt("pref_mirror_key", -1)
-        
+
         binding.surface.holder.addCallback(this)
 
         binding.mirrorBtn.setOnClickListener {
             projLauncher.launch(projMgr.createScreenCaptureIntent())
         }
-        binding.flipBtn.setOnClickListener   { renderer.toggleFlip() }
-        binding.fmtBtn.setOnClickListener    { renderer.toggleFormat() }
-        binding.audioBtn.setOnClickListener  { toggleAudio() }
-
+        binding.flipBtn.setOnClickListener { renderer.toggleFlip() }
+        binding.fmtBtn.setOnClickListener  { renderer.toggleFormat() }
+        binding.audioBtn.setOnClickListener { toggleAudio() }
         binding.calibBtn.setOnClickListener { startCalibrationDialog() }
     }
 
@@ -78,18 +78,21 @@ class MainActivity : ComponentActivity(), SurfaceHolder.Callback {
 
     /* ---------- intercept wheel keys while mirroring ---------- */
     override fun dispatchKeyEvent(ev: KeyEvent): Boolean {
-        if (mirroring && ev.action == KeyEvent.ACTION_DOWN && ev.keyCode == mirrorKeyCode) {
+        if (mirroring &&
+            ev.action == KeyEvent.ACTION_DOWN &&
+            ev.keyCode == mirrorKeyCode
+        ) {
             sendBroadcast(Intent("TOGGLE_MIRROR_FROM_HW"))
             return true        // consume event
         }
         return super.dispatchKeyEvent(ev)
     }
 
-    /* ---------- audio toggle (unchanged stub) ---------- */
-    private fun toggleAudio() { /* your existing logic */ }
+    /* ---------- audio toggle (stub) ---------- */
+    private fun toggleAudio() { /* TODO: implement if needed */ }
 
     /* ---------- Surface callbacks ---------- */
-    override fun surfaceCreated(h: SurfaceHolder) { renderer.open(h.surface) }
+    override fun surfaceCreated(h: SurfaceHolder)   = renderer.open(h.surface)
     override fun surfaceChanged(h: SurfaceHolder, f: Int, w: Int, hgt: Int) = Unit
-    override fun surfaceDestroyed(h: SurfaceHolder) { renderer.close() }
+    override fun surfaceDestroyed(h: SurfaceHolder) = renderer.close()
 }
