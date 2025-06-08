@@ -1,80 +1,75 @@
 package com.example.auxviewer
 
-import android.app.Notification
-import android.app.NotificationChannel
-import android.app.NotificationManager
-import android.app.Service
-import android.content.BroadcastReceiver
-import android.content.Context
+import android.app.*
 import android.content.Intent
-import android.content.IntentFilter
-import android.graphics.Color
-import android.hardware.display.DisplayManager
-import android.hardware.display.VirtualDisplay
-import android.media.projection.MediaProjection
 import android.media.projection.MediaProjectionManager
 import android.os.Build
 import android.os.IBinder
-import android.view.Surface
+import androidx.core.app.NotificationCompat
 
 class ScreenMirrorService : Service() {
 
-    private lateinit var projMgr: MediaProjectionManager
-    private var projection: MediaProjection? = null
-    private var vDisplay: VirtualDisplay? = null
-    private var surface: Surface? = null
-    private var mirrored = false
+    companion object {
+        const val NOTIF_CH_ID = "mirror_channel"
+        const val NOTIF_ID    = 42
+    }
 
-    /* --- receive toggle from steering-wheel key --- */
-    private val toggleRx = object : BroadcastReceiver() {
-        override fun onReceive(c: Context?, i: Intent?) {
-            mirrored = !mirrored
-            VideoRenderer.instance?.setMirror(mirrored)
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+
+        // 1️⃣  promote to foreground *before* touching MediaProjection
+        promoteToForeground()
+
+        // 2️⃣  obtain MediaProjection and create the VirtualDisplay
+        val mgr = getSystemService(MediaProjectionManager::class.java)
+        val projIntent = intent?.getParcelableExtra(
+            "result_data", Intent::class.java) ?: run {
+            stopSelf()
+            return START_NOT_STICKY
         }
-    }
-
-    override fun onCreate() {
-        registerReceiver(toggleRx, IntentFilter("TOGGLE_MIRROR_FROM_HW"))
-        createNotifChannel()
-    }
-
-    override fun onStartCommand(i: Intent?, flags: Int, startId: Int): Int {
-        val code = i!!.getIntExtra("code", 0)
-        val data = i.getParcelableExtra<Intent>("data")!!
-        projMgr = getSystemService(MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
-        projection = projMgr.getMediaProjection(code, data)
-
-        surface = VideoRenderer.instance?.createMirrorSurface()
-        vDisplay = projection!!.createVirtualDisplay(
-            "AUXMirror", 1280, 720, resources.displayMetrics.densityDpi,
-            DisplayManager.VIRTUAL_DISPLAY_FLAG_PUBLIC,
-            surface, null, null
+        val projection = mgr.getMediaProjection(Activity.RESULT_OK, projIntent)
+        val surface = VideoRenderer.instance?.createMirrorSurface()
+            ?: error("renderer not ready")
+        val dm = resources.displayMetrics
+        projection.createVirtualDisplay(
+            "MirrorDisplay",
+            dm.widthPixels, dm.heightPixels, dm.densityDpi,
+            0, surface, null, null
         )
-        startForeground(1, notif("Mirroring ON"))
+
         return START_STICKY
     }
 
-    override fun onDestroy() {
-        unregisterReceiver(toggleRx)
-        vDisplay?.release()
-        projection?.stop()
-        super.onDestroy()
+    private fun promoteToForeground() {
+        if (Build.VERSION.SDK_INT >= 26) {
+            val nm = getSystemService(NotificationManager::class.java)
+            if (nm.getNotificationChannel(NOTIF_CH_ID) == null) {
+                nm.createNotificationChannel(
+                    NotificationChannel(
+                        NOTIF_CH_ID, "Screen mirror",
+                        NotificationManager.IMPORTANCE_LOW
+                    )
+                )
+            }
+            val notif = NotificationCompat.Builder(this, NOTIF_CH_ID)
+                .setSmallIcon(android.R.drawable.stat_sys_warning)
+                .setContentTitle("Screen-mirror running")
+                .setContentText("Tap to stop")
+                .setOngoing(true)
+                .build()
+
+            // Pass the proper foreground-service type flag (Android 12+)
+            startForeground(
+                NOTIF_ID,
+                notif,
+                ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION
+            )
+        }
     }
 
-    override fun onBind(p0: Intent?): IBinder? = null
+    override fun onBind(intent: Intent?): IBinder? = null
 
-    private fun notif(text: String): Notification =
-        Notification.Builder(this, "mirror")
-            .setContentTitle(text)
-            .setSmallIcon(android.R.drawable.ic_menu_view)
-            .build()
-
-    private fun createNotifChannel() {
-        if (Build.VERSION.SDK_INT >= 26) {
-            val mgr = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
-            val ch = NotificationChannel("mirror", "Mirror", NotificationManager.IMPORTANCE_LOW)
-            ch.enableLights(false); ch.enableVibration(false); ch.lightColor = Color.BLUE
-            mgr.createNotificationChannel(ch)
-        }
+    override fun onDestroy() {
+        stopForeground(STOP_FOREGROUND_REMOVE)
+        super.onDestroy()
     }
 }
