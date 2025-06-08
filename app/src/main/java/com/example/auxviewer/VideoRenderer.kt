@@ -41,6 +41,18 @@ class VideoRenderer {
     /** Toggle mirror flag from button & steering-wheel key */
     fun setMirror(enable: Boolean) { mirror = enable }
 
+    /* ----- vertical flip & format toggle stubs ----- */
+private var flipY = false
+private var pal   = false
+
+fun toggleFlip() { flipY = !flipY }
+
+fun toggleFormat() {
+    pal = !pal
+    // NTSC↔PAL switch is a no-op for now; you can hook actual logic later
+}
+
+
     /** Service calls this to obtain a Surface to feed captured frames */
     fun createMirrorSurface(): Surface {
         if (projectionSurface == null) {
