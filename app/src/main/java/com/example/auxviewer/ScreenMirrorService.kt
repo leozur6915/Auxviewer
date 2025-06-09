@@ -6,6 +6,8 @@ import android.media.projection.MediaProjectionManager
 import android.os.Build
 import android.os.IBinder
 import androidx.core.app.NotificationCompat
+import android.content.pm.ServiceInfo
+
 
 class ScreenMirrorService : Service() {
 
