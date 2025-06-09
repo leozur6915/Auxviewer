@@ -1,11 +1,3 @@
-java.lang.NoSuchMethodError: … getParcelableExtra(String, Class)
-``` :contentReference[oaicite:2]{index=2}.
-
----
-
-### Drop-in fix → replace your **`ScreenMirrorService.kt`** completely
-
-```kotlin
 package com.example.auxviewer
 
 import android.app.*
@@ -16,77 +8,112 @@ import android.media.projection.MediaProjectionManager
 import android.os.Build
 import android.os.IBinder
 
+/**
+ * Foreground service that holds the MediaProjection virtual-display
+ * and listens for the steering-wheel toggle broadcast.
+ */
 class ScreenMirrorService : Service() {
 
+    companion object {
+        private const val CHANNEL_ID = "mirror_channel"
+        private const val NOTIF_ID   = 1
+    }
+
     private var projection: MediaProjection? = null
-    private lateinit var renderer: ScreenMirrorRenderer          // your existing renderer
-    private val toggleRcvr = object : BroadcastReceiver() {
+    private var running = false
+
+    /* receive "TOGGLE_MIRROR_FROM_HW" from MainActivity.dispatchKeyEvent */
+    private val toggleRx = object : BroadcastReceiver() {
         override fun onReceive(c: Context?, i: Intent?) {
-            renderer.toggleMirror()                              // same helper you already call
+            VideoRenderer.instance?.toggleMirror()
         }
     }
 
-    /* -------- foreground-service boilerplate -------- */
-    private val chanId = "mirror_foreground"
+    /* ---------- Service lifecycle ---------- */
 
     override fun onCreate() {
         super.onCreate()
-        (getSystemService(NOTIFICATION_SERVICE) as NotificationManager).apply {
-            createNotificationChannel(
-                NotificationChannel(
-                    chanId, "Screen mirroring",
-                    NotificationManager.IMPORTANCE_LOW
-                )
-            )
-        }
+        createNotificationChannel()
+        registerReceiver(toggleRx, IntentFilter("TOGGLE_MIRROR_FROM_HW"))
     }
 
-    private fun tinyNotif(): Notification =
-        Notification.Builder(this, chanId)
-            .setContentTitle("Screen mirroring running")
-            .setSmallIcon(android.R.drawable.stat_sys_warning)
-            .build()
-
-    /* -------- entry-point -------- */
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        if (intent == null) return START_NOT_STICKY
+        if (running || intent == null) return START_STICKY   // already active
 
-        /* compatible way to fetch the Intent we got from MainActivity */
-        val projIntent: Intent? = if (Build.VERSION.SDK_INT >= 33) {
+        /* 1 ─ promote to foreground (mandatory for MediaProjection) */
+        startForeground(
+            NOTIF_ID,
+            buildNotification(),
+            if (Build.VERSION.SDK_INT >= 29)
+                ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION
+            else 0
+        )
+
+        /* 2 ─ obtain the MediaProjection intent passed from MainActivity */
+        val resultData: Intent? = if (Build.VERSION.SDK_INT >= 33) {
             intent.getParcelableExtra("result_data", Intent::class.java)
         } else {
             @Suppress("DEPRECATION")
-            intent.getParcelableExtra("result_data") as? Intent
-        }
-        if (projIntent == null) return START_NOT_STICKY
-
-        val mpMgr = getSystemService(MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
-        projection = mpMgr.getMediaProjection(Activity.RESULT_OK, projIntent)
-
-        // foreground – older API uses the 2-arg form
-        if (Build.VERSION.SDK_INT >= 29) {
-            startForeground(
-                1, tinyNotif(),
-                ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION
-            )
-        } else {
-            @Suppress("DEPRECATION")
-            startForeground(1, tinyNotif())
+            intent.getParcelableExtra("result_data")
         }
 
-        renderer = ScreenMirrorRenderer(projection!!, resources.displayMetrics)
-        renderer.start()
+        if (resultData == null) { stopSelf(); return START_NOT_STICKY }
 
-        registerReceiver(toggleRcvr, IntentFilter("TOGGLE_MIRROR_FROM_HW"))
+        val projMgr = getSystemService(MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
+        projection  = projMgr.getMediaProjection(Activity.RESULT_OK, resultData)
+
+        /* 3 ─ feed frames into the existing VideoRenderer */
+        val dm  = resources.displayMetrics
+        val surf = VideoRenderer.instance?.createMirrorSurface()
+            ?: run { stopSelf(); return START_NOT_STICKY }
+
+        projection!!.createVirtualDisplay(
+            "MirrorDisplay",
+            dm.widthPixels, dm.heightPixels, dm.densityDpi,
+            0, surf, null, null
+        )
+
+        running = true
         return START_STICKY
     }
 
     override fun onDestroy() {
-        unregisterReceiver(toggleRcvr)
-        renderer.stop()
+        unregisterReceiver(toggleRx)
         projection?.stop()
         super.onDestroy()
     }
 
-    override fun onBind(intent: Intent?): IBinder? = null
+    override fun onBind(p0: Intent?): IBinder? = null
+
+    /* ---------- helpers ---------- */
+
+    private fun createNotificationChannel() {
+        if (Build.VERSION.SDK_INT >= 26) {
+            val nm = getSystemService(NotificationManager::class.java)
+            if (nm.getNotificationChannel(CHANNEL_ID) == null) {
+                nm.createNotificationChannel(
+                    NotificationChannel(
+                        CHANNEL_ID, "Screen mirroring",
+                        NotificationManager.IMPORTANCE_LOW
+                    ).apply { setShowBadge(false) }
+                )
+            }
+        }
+    }
+
+    private fun buildNotification(): Notification =
+        if (Build.VERSION.SDK_INT >= 26) {
+            Notification.Builder(this, CHANNEL_ID)
+                .setSmallIcon(android.R.drawable.stat_sys_warning)
+                .setContentTitle("Screen mirroring active")
+                .setOngoing(true)
+                .build()
+        } else {
+            @Suppress("DEPRECATION")
+            Notification.Builder(this)
+                .setSmallIcon(android.R.drawable.stat_sys_warning)
+                .setContentTitle("Screen mirroring active")
+                .setOngoing(true)
+                .build()
+        }
 }
