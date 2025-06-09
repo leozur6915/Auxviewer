@@ -1,77 +1,92 @@
+java.lang.NoSuchMethodError: … getParcelableExtra(String, Class)
+``` :contentReference[oaicite:2]{index=2}.
+
+---
+
+### Drop-in fix → replace your **`ScreenMirrorService.kt`** completely
+
+```kotlin
 package com.example.auxviewer
 
 import android.app.*
-import android.content.Intent
+import android.content.*
+import android.content.pm.ServiceInfo
+import android.media.projection.MediaProjection
 import android.media.projection.MediaProjectionManager
 import android.os.Build
 import android.os.IBinder
-import androidx.core.app.NotificationCompat
-import android.content.pm.ServiceInfo
-
 
 class ScreenMirrorService : Service() {
 
-    companion object {
-        const val NOTIF_CH_ID = "mirror_channel"
-        const val NOTIF_ID    = 42
-    }
-
-    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-
-        // 1️⃣  promote to foreground *before* touching MediaProjection
-        promoteToForeground()
-
-        // 2️⃣  obtain MediaProjection and create the VirtualDisplay
-        val mgr = getSystemService(MediaProjectionManager::class.java)
-        val projIntent = intent?.getParcelableExtra(
-            "result_data", Intent::class.java) ?: run {
-            stopSelf()
-            return START_NOT_STICKY
+    private var projection: MediaProjection? = null
+    private lateinit var renderer: ScreenMirrorRenderer          // your existing renderer
+    private val toggleRcvr = object : BroadcastReceiver() {
+        override fun onReceive(c: Context?, i: Intent?) {
+            renderer.toggleMirror()                              // same helper you already call
         }
-        val projection = mgr.getMediaProjection(Activity.RESULT_OK, projIntent)
-        val surface = VideoRenderer.instance?.createMirrorSurface()
-            ?: error("renderer not ready")
-        val dm = resources.displayMetrics
-        projection.createVirtualDisplay(
-            "MirrorDisplay",
-            dm.widthPixels, dm.heightPixels, dm.densityDpi,
-            0, surface, null, null
-        )
-
-        return START_STICKY
     }
 
-    private fun promoteToForeground() {
-        if (Build.VERSION.SDK_INT >= 26) {
-            val nm = getSystemService(NotificationManager::class.java)
-            if (nm.getNotificationChannel(NOTIF_CH_ID) == null) {
-                nm.createNotificationChannel(
-                    NotificationChannel(
-                        NOTIF_CH_ID, "Screen mirror",
-                        NotificationManager.IMPORTANCE_LOW
-                    )
-                )
-            }
-            val notif = NotificationCompat.Builder(this, NOTIF_CH_ID)
-                .setSmallIcon(android.R.drawable.stat_sys_warning)
-                .setContentTitle("Screen-mirror running")
-                .setContentText("Tap to stop")
-                .setOngoing(true)
-                .build()
+    /* -------- foreground-service boilerplate -------- */
+    private val chanId = "mirror_foreground"
 
-            // Pass the proper foreground-service type flag (Android 12+)
-            startForeground(
-                NOTIF_ID,
-                notif,
-                ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION
+    override fun onCreate() {
+        super.onCreate()
+        (getSystemService(NOTIFICATION_SERVICE) as NotificationManager).apply {
+            createNotificationChannel(
+                NotificationChannel(
+                    chanId, "Screen mirroring",
+                    NotificationManager.IMPORTANCE_LOW
+                )
             )
         }
     }
 
-    override fun onBind(intent: Intent?): IBinder? = null
+    private fun tinyNotif(): Notification =
+        Notification.Builder(this, chanId)
+            .setContentTitle("Screen mirroring running")
+            .setSmallIcon(android.R.drawable.stat_sys_warning)
+            .build()
+
+    /* -------- entry-point -------- */
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        if (intent == null) return START_NOT_STICKY
+
+        /* compatible way to fetch the Intent we got from MainActivity */
+        val projIntent: Intent? = if (Build.VERSION.SDK_INT >= 33) {
+            intent.getParcelableExtra("result_data", Intent::class.java)
+        } else {
+            @Suppress("DEPRECATION")
+            intent.getParcelableExtra("result_data") as? Intent
+        }
+        if (projIntent == null) return START_NOT_STICKY
+
+        val mpMgr = getSystemService(MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
+        projection = mpMgr.getMediaProjection(Activity.RESULT_OK, projIntent)
+
+        // foreground – older API uses the 2-arg form
+        if (Build.VERSION.SDK_INT >= 29) {
+            startForeground(
+                1, tinyNotif(),
+                ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION
+            )
+        } else {
+            @Suppress("DEPRECATION")
+            startForeground(1, tinyNotif())
+        }
+
+        renderer = ScreenMirrorRenderer(projection!!, resources.displayMetrics)
+        renderer.start()
+
+        registerReceiver(toggleRcvr, IntentFilter("TOGGLE_MIRROR_FROM_HW"))
+        return START_STICKY
+    }
 
     override fun onDestroy() {
-        stopForeground(STOP_FOREGROUND_REMOVE)
+        unregisterReceiver(toggleRcvr)
+        renderer.stop()
+        projection?.stop()
         super.onDestroy()
     }
+
+    override fun onBind(intent: Intent?): IBinder? = null
 }
