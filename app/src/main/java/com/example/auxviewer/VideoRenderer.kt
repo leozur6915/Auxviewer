@@ -40,6 +40,7 @@ class VideoRenderer {
 
     /** Toggle mirror flag from button & steering-wheel key */
     fun setMirror(enable: Boolean) { mirror = enable }
+     fun toggleMirror() { mirror = !mirror }
 
     /* ----- vertical flip & format toggle stubs ----- */
 private var flipY = false
