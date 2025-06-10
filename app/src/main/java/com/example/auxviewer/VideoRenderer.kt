@@ -96,6 +96,7 @@ fun toggleFormat() {
     }
 
     private fun drawFrame(st: SurfaceTexture) {
+        EGL14.eglMakeCurrent(eglDisplay, eglSurface, eglSurface, eglContext)
         st.updateTexImage()
         GLES20.glViewport(0, 0, 1280, 720)
         GLES20.glUseProgram(shader)
