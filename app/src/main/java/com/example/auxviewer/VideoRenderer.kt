@@ -95,19 +95,24 @@ fun toggleFormat() {
         shader = createProgram(VS, FS)
     }
 
-    private fun drawFrame(st: SurfaceTexture) {
-        EGL14.eglMakeCurrent(eglDisplay, eglSurface, eglSurface, eglContext)
-        st.updateTexImage()
-        GLES20.glViewport(0, 0, 1280, 720)
-        GLES20.glUseProgram(shader)
-        GLES20.glUniform1i(GLES20.glGetUniformLocation(shader, "uTex"), 0)
-        GLES20.glUniform1i(
-            GLES20.glGetUniformLocation(shader, "uMirror"),
-            if (mirror) 1 else 0)
-        // draw a full-screen quad (VAO setup omitted for brevity) …
-        GLES20.glDrawArrays(GLES20.GL_TRIANGLE_STRIP, 0, 4)
-        EGL14.eglSwapBuffers(eglDisplay, eglSurface)
+    private fun drawFrame() {
+    if (!egl.eglMakeCurrent(display, surface, surface, context)) {
+        // No context – skip this frame instead of crashing.
+        Log.w(TAG, "EGL context not current, frame dropped")
+        return
     }
+    try {
+        texSurfaceTexture.updateTexImage()
+    } catch (ise: IllegalStateException) {
+        Log.e(TAG, "updateTexImage failed, dropping frame", ise)
+        return
+    }
+
+    GLES20.glViewport(0, 0, width, height)
+    shader.draw(texMatrix, mirrorX, mirrorY)
+    egl.eglSwapBuffers(display, surface)
+}
+
 
     private fun releaseGL() {
         projectionSurface?.release(); projectionSurface = null
